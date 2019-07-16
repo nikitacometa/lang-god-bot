@@ -1,0 +1,42 @@
+import logging
+import os
+import sqlalchemy
+
+
+logger = logging.getLogger()
+
+db_user = os.environ.get("DB_USER")
+db_pass = os.environ.get("DB_PASS")
+cloud_sql_connection_name = os.environ.get("CLOUD_SQL_CONNECTION_NAME")
+
+
+def get_db(db_name):
+    return sqlalchemy.create_engine(
+        sqlalchemy.engine.url.URL(
+            drivername='postgres+pg8000',
+            username=db_user,
+            password=db_pass,
+            database=db_name,
+            query={
+                'unix_sock': '/cloudsql/{}/.s.PGSQL.5432'.format(
+                    cloud_sql_connection_name)
+            }
+        ),
+        # Pool size is the maximum number of permanent connections to keep.
+        pool_size=5,
+
+        # Temporarily exceeds the set pool_size if no connections are available.
+        max_overflow=2,
+        # The total number of concurrent connections for the application will be
+        # a total of pool_size and max_overflow.
+
+        # The maximum number of seconds to wait when retrieving a
+        # new connection from the pool. After the specified amount of time, an
+        # exception will be thrown.
+        pool_timeout=30,  # 30 seconds
+
+        # The maximum number of seconds a connection can persist.
+        # Connections that live longer than the specified amount of time will be
+        # reestablished
+        pool_recycle=1800,  # 30 minutes
+    )
