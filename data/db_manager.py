@@ -1,25 +1,18 @@
-import logging
 import os
 import sqlalchemy
-
-
-logger = logging.getLogger()
-
-db_user = os.environ.get("DB_USER")
-db_pass = os.environ.get("DB_PASS")
-cloud_sql_connection_name = os.environ.get("CLOUD_SQL_CONNECTION_NAME")
 
 
 def get_db(db_name):
     return sqlalchemy.create_engine(
         sqlalchemy.engine.url.URL(
             drivername='postgres+pg8000',
-            username=db_user,
-            password=db_pass,
+            username=os.environ.get("DB_USER"),
+            password=os.environ.get("DB_PASS"),
             database=db_name,
             query={
                 'unix_sock': '/cloudsql/{}/.s.PGSQL.5432'.format(
-                    cloud_sql_connection_name)
+                    os.environ.get("CLOUD_SQL_CONNECTION_NAME")
+                )
             }
         ),
         # Pool size is the maximum number of permanent connections to keep.

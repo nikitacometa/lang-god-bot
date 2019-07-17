@@ -1,11 +1,11 @@
 import logging
 import sqlalchemy
 
-import db_utils
+from data import db_manager
 
 logger = logging.getLogger()
 
-account_db = db_utils.get_db('account')
+account_db = db_manager.get_db('account')
 
 SAVE_QUERY = sqlalchemy.text(
                 "INSERT INTO account (user_id, username) "

@@ -1,15 +1,14 @@
 import logging
 import sqlalchemy
 
-import db_utils
-
+from data import db_manager
 
 logger = logging.getLogger()
 
 source_lang = 'en'
 translation_lang = 'ru'
 
-account_db = db_utils.get_db('translation')
+account_db = db_manager.get_db('translation')
 
 SAVE_QUERY = sqlalchemy.text(
     "INSERT INTO translation (user_id, word, translation, source_lang, translation_lang) "
