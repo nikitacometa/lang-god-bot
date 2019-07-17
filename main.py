@@ -8,19 +8,19 @@ import os
 import telegram
 import logging
 
-import account_manager
-
-from telegram import (ReplyKeyboardMarkup, ReplyKeyboardRemove, InlineKeyboardButton, InlineKeyboardMarkup)
-from telegram.ext import (Updater, CommandHandler, MessageHandler, Filters, RegexHandler,
+from telegram import (InlineKeyboardButton, InlineKeyboardMarkup)
+from telegram.ext import (Updater, CommandHandler, MessageHandler, Filters,
                           ConversationHandler, CallbackQueryHandler)
 from telegram.utils.request import Request
+
+import translation_manager
 
 
 PROXY_URL = os.environ["PROXY_SERVER"]
 
-logging.basicConfig(format='%(asctime)s-%(name)s-%(levelname)s-%(message)s', level=logging.INFO)
+logging.basicConfig(format='[%(asctime)s][%(levelname)s][%(filename)s:%(lineno)d] %(message)s', level=logging.INFO)
 logger = logging.getLogger()
-bot = None
+bot_instance = None
 
 
 def create_bot():
@@ -29,11 +29,16 @@ def create_bot():
     return telegram.Bot(token=os.environ["TELEGRAM_TOKEN"], request=request)
 
 
-SELECTING_ANSWER, BEFORE_NEXT_QUESTION, QUIZ_END, IDLE = range(4)
+SELECTING_ANSWER, BEFORE_NEXT_QUESTION, QUIZ_END = range(3)
 
 
 def start(update, context):
-    update.message.reply_text('Welcome, {}!'.format(update.message.from_user.username))
+    logger.info("Start!")
+
+    context.chat_data['id'] = update.message.chat.id
+    context.user_data['username'] = update.message.from_user.username
+
+    update.message.reply_text('Welcome, {}!'.format(context.user_data['username']))
 
 
 def process_new_translations(user_id, translation_request):
@@ -42,64 +47,81 @@ def process_new_translations(user_id, translation_request):
     new_translations = 0
 
     for translation in translations:
-        if account_manager.save_translation(user_id, word, translation):
+        if translation_manager.save_translation(user_id, word, translation):
             new_translations += 1
 
     return new_translations
 
 
 def add_translations(update, context):
+    logger.info("Add translations!")
+
     new_entries_count = process_new_translations(update.message.from_user.id, update.message.text)
 
-    update.message.reply_text("{} new translations were added!", new_entries_count)
-
-    return IDLE
+    update.message.reply_text("{} new translations were added!".format(new_entries_count))
 
 
 def process_show_translations(user_id):
-    user_translations = account_manager.get_user_translations(user_id)
+    user_translations = translation_manager.get_user_translations(user_id)
 
     return '\n'.join(word + ', '.join(trans) for word, trans in user_translations.items())
 
 
 def show_translations(update, context):
-    update.message.reply_text(process_show_translations(update.message.from_user.id))
+    logger.info("Show translations!")
 
-    return IDLE
+    update.message.reply_text(process_show_translations(update.message.from_user.id))
 
 
 def start_quiz(update, context):
+    logger.info("Quiz start!")
+
     update.message.reply_text('Let\'s have fun, {}!'.format(update.message.from_user.username))
 
     return next_question(update, context)
 
 
 def next_question(update, context):
-    button_list = [
-        [InlineKeyboardButton("First", callback_data=1),
-         InlineKeyboardButton("Second", callback_data=2),
-         InlineKeyboardButton("Third", callback_data=3),
-         InlineKeyboardButton("Fourth", callback_data=4)]
-        ]
+    logger.info("Next question!")
 
-    update.message.reply_text("Choose translation that fits the best:", reply_markup=InlineKeyboardMarkup(button_list))
+    button_list = [[
+        InlineKeyboardButton("First", callback_data='1'),
+        InlineKeyboardButton("Second", callback_data='2'),
+        InlineKeyboardButton("Third", callback_data='3'),
+        InlineKeyboardButton("Fourth", callback_data='4')
+    ]]
+
+    update.message.reply_text("Choose translation that fits best:", reply_markup=InlineKeyboardMarkup(button_list))
 
     return SELECTING_ANSWER
 
 
-def select_option(update, option_number):
-    update.message.reply_text("You've chosen the option #{}!", option_number)
+def select_option(update, context):
+    query = update.callback_query
+
+    logger.info("Option %s was chosen!", query.data)
+
+    query.edit_message_text(text="Selected option: {}".format(query.data))
+
+    button_list = [[
+        InlineKeyboardButton("Next", callback_data='next'),
+        InlineKeyboardButton("End", callback_data='end'),
+    ]]
+    markup = InlineKeyboardMarkup(button_list, one_time_keyboard=True)
+
+    context.bot.send_message(
+        chat_id=context.chat_data['id'],
+        text='Continue?',
+        reply_markup=markup
+    )
 
     return BEFORE_NEXT_QUESTION
 
 
 def end_quiz(update, context):
+    logger.info("Quiz end!")
+
     update.message.reply_text('WTF, {}!?'.format(update.message.from_user.username))
-
-
-def cancel(update, context):
-    # TODO: cancel something here
-    update.message.reply_text('All cancelled!')
 
 
 def log_error(update, context):
@@ -107,49 +129,40 @@ def log_error(update, context):
 
 
 def main():
-    global bot
-    bot = create_bot()
+    global bot_instance
+    bot_instance = create_bot()
 
-    additional_arguments = {
-        'proxy_url': os.environ["PROXY_SERVER"]
-    }
+    additional_arguments = {}
+    if "PROXY_SERVER" in os.environ:
+        additional_arguments['proxy_url'] = os.environ["PROXY_SERVER"]
 
-    updater = Updater(os.environ["TELEGRAM_TOKEN"], request_kwargs=additional_arguments)
-    dp = updater.dispatcher
+    updater = Updater(os.environ["TELEGRAM_TOKEN"], use_context=True, request_kwargs=additional_arguments)
+    dispatcher = updater.dispatcher
 
     quiz_handler = ConversationHandler(
         entry_points=[CommandHandler('quiz', start_quiz)],
 
         states={
-            BEFORE_NEXT_QUESTION: [MessageHandler('next', next_question),
-                                   CommandHandler('end', end_quiz)],
+            BEFORE_NEXT_QUESTION: [MessageHandler(Filters.regex('^Next$'), next_question),
+                                   MessageHandler(Filters.regex('^End$'), end_quiz)],
 
-            SELECTING_ANSWER: [CallbackQueryHandler(select_option, pass_user_data=True)],
-
-            QUIZ_END: [CallbackQueryHandler(end_quiz)]
+            SELECTING_ANSWER: [CallbackQueryHandler(select_option)]
         },
 
         fallbacks=[CommandHandler('end', end_quiz)]
     )
 
-    dictionary_handler = ConversationHandler(
-        entry_points=[CommandHandler('start', start)],
+    dispatcher.add_handler(quiz_handler)
 
-        states={
-            IDLE: [MessageHandler('add', add_translations),
-                   MessageHandler('show', show_translations)]
-        },
+    dispatcher.add_handler(CommandHandler('start', start))
+    dispatcher.add_handler(CommandHandler('add', add_translations))
+    dispatcher.add_handler(CommandHandler('show', show_translations))
 
-        fallbacks=[CommandHandler('cancel', cancel)]
-    )
+    dispatcher.add_error_handler(log_error)
 
-    dp.add_handler(quiz_handler)
-    dp.add_handler(dictionary_handler)
-    dp.add_error_handler(log_error)
+    updater.start_polling()
 
-    # updater.start_polling()
-
-    updater.start_webhook(webhook_url='https://us-central1-langgodbot.cloudfunctions.net/webhook')
+    logger.info("Bot started!")
 
     updater.idle()
 
