@@ -1,14 +1,6 @@
 from telegram.ext import CommandHandler
 
-from bot.commands import handlers
-
-# TODO: make class Commands
-
-command_registry = {}
-
-
-def register_command(command):
-    command_registry[command.name] = command
+from bot.commands.handlers import Handlers
 
 
 class LangCommand:
@@ -17,39 +9,47 @@ class LangCommand:
         self.description = description
         self.handler_function = handler_function
         self.show_in_help = show_in_help
-        register_command(self)
+
+        Commands.register_command(self)
 
     @property
     def handler(self):
         return CommandHandler(self.name, self.handler_function)
 
 
-start = LangCommand(
-    'start',
-    'show menu',
-    handlers.start
-)
+class Commands:
+    registry = {}
 
-add_translations = LangCommand(
-    'add',
-    'add new translations',
-    handlers.add_translations
-)
+    start = LangCommand(
+        'start',
+        'show menu',
+        Handlers.start
+    )
 
-show_translations = LangCommand(
-    'show',
-    'show translations',
-    handlers.show_translations
-)
+    add_translations = LangCommand(
+        'add',
+        'add new translations',
+        Handlers.add_translations
+    )
 
-start_quiz = LangCommand(
-    'quiz',
-    'start new quiz',
-    handlers.start_quiz
-)
+    show_translations = LangCommand(
+        'show',
+        'show translations',
+        Handlers.show_translations
+    )
 
-end_quiz = LangCommand(
-    'end',
-    'end current quiz',
-    handlers.end_quiz
-)
+    start_quiz = LangCommand(
+        'quiz',
+        'start new quiz',
+        Handlers.start_quiz
+    )
+
+    end_quiz = LangCommand(
+        'end',
+        'end current quiz',
+        Handlers.end_quiz
+    )
+
+    @classmethod
+    def register_command(cls, command):
+        cls.registry[command.name] = command

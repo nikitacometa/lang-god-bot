@@ -1,17 +1,18 @@
-import os
 import sqlalchemy
+
+from settings import Settings
 
 
 def get_db(db_name):
     return sqlalchemy.create_engine(
         sqlalchemy.engine.url.URL(
             drivername='postgres+pg8000',
-            username=os.environ.get("DB_USER"),
-            password=os.environ.get("DB_PASS"),
+            username=Settings.DB_USER,
+            password=Settings.DB_PASS,
             database=db_name,
             query={
                 'unix_sock': '/cloudsql/{}/.s.PGSQL.5432'.format(
-                    os.environ.get("CLOUD_SQL_CONNECTION_NAME")
+                    Settings.CLOUD_SQL_CONNECTION_NAME
                 )
             }
         ),

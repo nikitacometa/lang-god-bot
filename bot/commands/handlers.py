@@ -2,139 +2,123 @@ import logging
 
 from telegram import (InlineKeyboardButton, InlineKeyboardMarkup)
 
-from data import translation_manager
+from data.data_processing import DataProcessing
 from bot.state import QuizState
 
 
-# TODO: make class Handlers
+class Handlers:
+    _logger = logging.getLogger(__name__)
 
-logger = logging.getLogger()
+    @classmethod
+    def start(cls, update, context):
+        cls._logger.info("Start!")
 
+        context.chat_data['id'] = update.message.chat.id
+        context.user_data['username'] = update.message.from_user.username
 
-def start(update, context):
-    logger.info("Start!")
+        update.message.reply_text("Welcome, {}!".format(context.user_data['username']))
 
-    context.chat_data['id'] = update.message.chat.id
-    context.user_data['username'] = update.message.from_user.username
+    @classmethod
+    def add_translations(cls, update, context):
+        cls._logger.info("Add translations!")
 
-    update.message.reply_text("Welcome, {}!".format(context.user_data['username']))
+        translation_string = " ".join(context.args)
+        cls._logger.info("Translations = '%s'", translation_string)
 
+        new_entries_count = DataProcessing.process_new_translations(update.message.from_user.id, translation_string)
 
-def process_new_translations(user_id, translation_request):
-    word, translations_str = translation_request.split(' - ')
-    translations = translations_str.split(',')
-    new_translations = 0
+        update.message.reply_text("{} new translations were added!".format(new_entries_count))
 
-    for translation in translations:
-        if translation_manager.save_translation(user_id, word, translation):
-            new_translations += 1
+    @classmethod
+    def show_translations(cls, update, context):
+        cls._logger.info("Show translations!")
 
-    return new_translations
+        update.message.reply_text(process_show_translations(update.message.from_user.id))
 
+    @classmethod
+    def start_quiz(cls, update, context):
+        cls._logger.info("Quiz start!")
 
-def add_translations(update, context):
-    logger.info("Add translations!")
+        update.message.reply_text("Let\'s have fun, {}!".format(update.message.from_user.username))
 
-    new_entries_count = process_new_translations(update.message.from_user.id, update.message.text)
+        context.chat_data['questions_count'] = 0
 
-    update.message.reply_text("{} new translations were added!".format(new_entries_count))
+        return cls.next_question(update, context)
 
+    @classmethod
+    def next_question(cls, update, context):
+        cls._logger.info("Next question!")
 
-def process_show_translations(user_id):
-    user_translations = translation_manager.get_user_translations(user_id)
+        button_list = [[
+            InlineKeyboardButton("Pidor", callback_data='1'),
+            InlineKeyboardButton("Master", callback_data='2'),
+            InlineKeyboardButton("Kardi-gun))", callback_data='3'),
+            InlineKeyboardButton("Mirz", callback_data='4')
+        ]]
 
-    return '\n'.join(word + ', '.join(trans) for word, trans in user_translations.items())
-
-
-def show_translations(update, context):
-    logger.info("Show translations!")
-
-    update.message.reply_text(process_show_translations(update.message.from_user.id))
-
-
-def start_quiz(update, context):
-    logger.info("Quiz start!")
-
-    update.message.reply_text("Let\'s have fun, {}!".format(update.message.from_user.username))
-
-    context.chat_data['questions_count'] = 0
-
-    return next_question(update, context)
-
-
-def next_question(update, context):
-    logger.info("Next question!")
-
-    button_list = [[
-        InlineKeyboardButton("First", callback_data='1'),
-        InlineKeyboardButton("Second", callback_data='2'),
-        InlineKeyboardButton("Third", callback_data='3'),
-        InlineKeyboardButton("Fourth", callback_data='4')
-    ]]
-
-    context.bot.send_message(
-        chat_id=context.chat_data['id'],
-        text="Choose translation that fits best:",
-        reply_markup=InlineKeyboardMarkup(button_list)
-    )
-
-    return QuizState.SELECTING_ANSWER
-
-
-def select_option(update, context):
-    query = update.callback_query
-
-    logger.info("Option %s was chosen!", query.data)
-
-    query.edit_message_text(text="Selected option: {}".format(query.data))
-
-    context.chat_data['questions_count'] += 1
-
-    button_list = [[
-        InlineKeyboardButton("Next", callback_data='next'),
-        InlineKeyboardButton("End", callback_data='end'),
-    ]]
-
-    context.bot.send_message(
-        chat_id=context.chat_data['id'],
-        text="Continue?",
-        reply_markup=InlineKeyboardMarkup(button_list)
-    )
-
-    return QuizState.BETWEEN_QUESTIONS
-
-
-def continue_quiz(update, context):
-    logger.info("Quiz continue!")
-
-    act = update.callback_query.data
-
-    if update.callback_query is not None:
-        update.callback_query.message.delete()
-
-    if act == 'next':
-        return next_question(update, context)
-    elif act == 'end':
-        return end_quiz(update, context)
-    else:
-        logger.error("Quiz continuation callback returned invalid response '%s'.", act)
-
-
-def end_quiz(update, context):
-    logger.info("Quiz end!")
-
-    context.bot.send_message(
-        chat_id=context.chat_data['id'],
-        text="Well done, {}! {} questions!".format(
-            context.user_data['username'],
-            context.chat_data['questions_count']
+        context.bot.send_message(
+            chat_id=context.chat_data['id'],
+            text="Choose translation that fits best:",
+            reply_markup=InlineKeyboardMarkup(button_list)
         )
-    )
 
-    del context.chat_data['questions_count']
+        return QuizState.SELECTING_ANSWER
 
-    return QuizState.SELECTING_ANSWER
+    @classmethod
+    def select_option(cls, update, context):
+        query = update.callback_query
 
+        cls._logger.info("Option %s was chosen!", query.data)
 
-def error(update, context):
-    logger.warning("Update '%s' caused error '%s'", update, context.error)
+        query.edit_message_text(text="Selected option: {}".format(query.data))
+
+        context.chat_data['questions_count'] += 1
+
+        button_list = [[
+            InlineKeyboardButton("Next", callback_data='next'),
+            InlineKeyboardButton("End", callback_data='end'),
+        ]]
+
+        context.bot.send_message(
+            chat_id=context.chat_data['id'],
+            text="Continue?",
+            reply_markup=InlineKeyboardMarkup(button_list)
+        )
+
+        return QuizState.BETWEEN_QUESTIONS
+
+    @classmethod
+    def continue_quiz(cls, update, context):
+        cls._logger.info("Quiz continue!")
+
+        act = update.callback_query.data
+
+        if update.callback_query is not None:
+            update.callback_query.message.delete()
+
+        if act == 'next':
+            return cls.next_question(update, context)
+        elif act == 'end':
+            return cls.end_quiz(update, context)
+        else:
+            cls._logger.error("Quiz continuation callback returned invalid response '%s'.", act)
+
+    @classmethod
+    def end_quiz(cls, update, context):
+        cls._logger.info("Quiz end!")
+
+        context.bot.send_message(
+            chat_id=context.chat_data['id'],
+            text="Well done, {}! {} questions!".format(
+                context.user_data['username'],
+                context.chat_data['questions_count']
+            )
+        )
+
+        del context.chat_data['questions_count']
+
+        return QuizState.SELECTING_ANSWER
+
+    @classmethod
+    def error(cls, update, context):
+        cls._logger.warning("Update '%s' caused error '%s'", update, context.error)

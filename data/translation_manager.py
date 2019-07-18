@@ -1,59 +1,65 @@
 import logging
 import sqlalchemy
 
-from data import db_manager
-
-logger = logging.getLogger()
-
-source_lang = 'en'
-translation_lang = 'ru'
-
-account_db = db_manager.get_db('translation')
-
-SAVE_QUERY = sqlalchemy.text(
-    "INSERT INTO translation (user_id, word, translation, source_lang, translation_lang) "
-    "VALUES (:user_id, :word, :translation, :source_lang, :translation_lang)"
-)
-
-GET_QUERY = sqlalchemy.text(
-    "SELECT word, translation from account "
-    "WHERE user_id = :user_id"
-)
+from data.db_manager import get_db
 
 
-def get_user_translations(user_id):
-    translation_lists = {}
+class TranslationManager:
+    SAVE_TRANSLATION_QUERY = sqlalchemy.text(
+        "INSERT INTO translation (user_id, word, translation, source_lang, translation_lang) "
+        "VALUES (:user_id, :word, :translation, :source_lang, :translation_lang)"
+    )
 
-    with account_db.connect() as conn:
-        recent_translations = conn.execute(
-            GET_QUERY,
-            user_id=user_id
-        ).fetchall()
+    GET_USER_TRANSLATIONS_QUERY = sqlalchemy.text(
+        "SELECT word, translation from account "
+        "WHERE user_id = :user_id"
+    )
 
-        for row in recent_translations:
-            word = row[0]
-            translation = row[1]
-            if word not in translation_lists:
-                translation_lists[word] = []
-            translation_lists[word].append(translation)
+    _logger = logging.getLogger(__name__)
 
-    return translation_lists
+    _source_lang = 'en'
+    _translation_lang = 'ru'
 
+    _translation_db = get_db('translation')
 
-def save_translation(user_id, word, translation):
-    try:
-        with account_db.connect() as conn:
-            conn.execute(
-                SAVE_QUERY,
-                user_id=user_id,
-                word=word,
-                translation=translation,
-                source_lang=source_lang,
-                translation_lang=translation_lang
-            )
+    @classmethod
+    def get_user_translations(cls, user_id):
+        cls._logger.debug("get: user_id = %s", user_id)
 
-    except Exception as e:
-        logger.exception(e)
-        return False
+        translation_lists = {}
 
-    return True
+        with cls._translation_db.connect() as conn:
+            recent_translations = conn.execute(
+                cls.GET_USER_TRANSLATIONS_QUERY,
+                user_id=user_id
+            ).fetchall()
+
+            for row in recent_translations:
+                word = row[0]
+                translation = row[1]
+                if word not in translation_lists:
+                    translation_lists[word] = []
+                translation_lists[word].append(translation)
+
+        return translation_lists
+
+    @classmethod
+    def save_translation(cls, user_id, word, translation):
+        cls._logger.debug("save: user_id = %d, word = %s, translation = %s", user_id, word, translation)
+
+        try:
+            with cls._translation_db.connect() as conn:
+                conn.execute(
+                    cls.SAVE_TRANSLATION_QUERY,
+                    user_id=user_id,
+                    word=word,
+                    translation=translation,
+                    source_lang=cls._source_lang,
+                    translation_lang=cls._translation_lang
+                )
+
+        except Exception as e:
+            cls._logger.exception(e)
+            return False
+
+        return True

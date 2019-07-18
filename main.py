@@ -1,71 +1,57 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
-#
-# @LangGodBot
-# Simple bot for new languages learning.
 
-import os
-import telegram
+from json import loads
+from flask import (Flask, request)
+from telegram import Update
+
+import langgodbot
+from settings import Settings
 import logging
 
-from telegram.ext import (Updater, CommandHandler, MessageHandler, Filters,
-                          ConversationHandler, CallbackQueryHandler)
-from telegram.utils.request import Request
-
-from bot.commands import (commands, handlers)
-from bot.state import QuizState
-
-logging.basicConfig(format='[%(asctime)s][%(levelname)s][%(filename)s:%(lineno)d] %(message)s', level=logging.DEBUG)
-logger = logging.getLogger()
-bot_instance = None
+app = Flask(__name__)
+logger = logging.getLogger(__name__)
 
 
-def create_bot():
-    request = Request(proxy_url=os.environ["PROXY_SERVER"])
+@app.route('/')
+def greet():
+    logger.info('index')
 
-    return telegram.Bot(token=os.environ["TELEGRAM_TOKEN"], request=request)
+    return "hey"
 
 
-def main():
-    global bot_instance
-    bot_instance = create_bot()
+@app.route('/set_webhook')
+def setup():
+    logger.info('set_webhook')
 
-    additional_arguments = {}
-    if "PROXY_SERVER" in os.environ:
-        additional_arguments['proxy_url'] = os.environ["PROXY_SERVER"]
+    bot = langgodbot.create_bot()
+    langgodbot.create_dispatcher(bot)
 
-    updater = Updater(os.environ["TELEGRAM_TOKEN"], use_context=True, request_kwargs=additional_arguments)
-    dispatcher = updater.dispatcher
+    webhook_set = bot.setWebhook(Settings.WEBHOOK_URL)
+    if webhook_set:
+        return "Webhook set"
+    else:
+        return "Webhook setup failed"
 
-    quiz_handler = ConversationHandler(
-        entry_points=[commands.start_quiz.handler],
 
-        states={
-            QuizState.NEXT_QUESTION: [CallbackQueryHandler(handlers.next_question)],
+@app.route('/' + Settings.TELEGRAM_TOKEN, methods=['GET', 'POST'])
+def handler():
+    logger.info("tg command, data = '%s'", request.data)
+    if langgodbot.dispatcher is None:
+        return "webhook wasn't set :("
 
-            QuizState.SELECTING_ANSWER: [CallbackQueryHandler(handlers.select_option)],
+    body = loads(request.data)
+    update = Update.de_json(body, langgodbot.bot_instance)
+    langgodbot.dispatcher.process_update(update)
 
-            QuizState.BETWEEN_QUESTIONS: [CallbackQueryHandler(handlers.continue_quiz)],
+    return "ok"
 
-            QuizState.END: [CallbackQueryHandler(handlers.end_quiz)]
-        },
 
-        fallbacks=[commands.end_quiz.handler]
-    )
+@app.route('/<string>')
+def echo(string):
+    logger.info("got string '%s'", string)
 
-    dispatcher.add_handler(quiz_handler)
-
-    for command in commands.command_registry.values():
-        dispatcher.add_handler(command.handler)
-
-    dispatcher.add_error_handler(handlers.error)
-
-    updater.start_polling()
-
-    logger.info("Bot started!")
-
-    updater.idle()
+    return string
 
 
 if __name__ == '__main__':
-    main()
+    app.run(host='0.0.0.0', port=8080)
