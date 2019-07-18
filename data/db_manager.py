@@ -1,6 +1,6 @@
 import sqlalchemy
 
-from settings import Settings
+from bot.settings import Settings
 
 
 def get_db(db_name):

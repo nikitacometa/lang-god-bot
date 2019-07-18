@@ -12,11 +12,9 @@ from telegram.utils.request import Request
 
 from bot.commands.commands import Commands
 from bot.commands.handlers import Handlers
+
 from bot.state import QuizState
-
-from settings import Settings
-
-logging.basicConfig(format=Settings.LOG_FORMAT, level=logging.DEBUG)
+from bot.settings import Settings
 
 
 class LangGodBot:
@@ -26,11 +24,25 @@ class LangGodBot:
     _logger = logging.getLogger(__name__)
 
     @classmethod
+    def initialized(cls):
+        return cls.bot is not None and cls.dispatcher is not None
+
+    @classmethod
     def initialize(cls):
         if cls.bot is None:
             cls.bot = cls._create_bot()
         if cls.dispatcher is None:
             cls.dispatcher = cls._create_dispatcher(cls.bot)
+        return cls.initialized()
+
+    @classmethod
+    def set_webhook(cls, url):
+        return cls.bot.setWebhook(url)
+
+    @classmethod
+    def webhook_set(cls):
+        webhook_info = cls.bot.get_webhook_info()
+        return webhook_info.url.strip() != ''
 
     @classmethod
     def _create_bot(cls):
@@ -60,7 +72,7 @@ class LangGodBot:
 
         dispatcher.add_handler(quiz_handler)
 
-        for command in Commands.registry.values():
+        for command in dir(Commands):
             cls._logger.info("Command '%s' registered!", command.name)
 
             dispatcher.add_handler(command.handler)

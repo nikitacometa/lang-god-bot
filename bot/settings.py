@@ -1,3 +1,5 @@
+import logging
+
 from os import environ
 from environment import Environment
 
@@ -19,3 +21,6 @@ class Settings:
     WEBHOOK_URL = "{}/{}".format(APPLICATION_URL, TELEGRAM_TOKEN)
 
     LOG_FORMAT = "[%(asctime)s][%(levelname)s][%(filename)s:%(lineno)d] %(message)s"
+
+
+logging.basicConfig(format=Settings.LOG_FORMAT, level=logging.INFO)

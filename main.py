@@ -4,8 +4,8 @@ from json import loads
 from flask import (Flask, request)
 from telegram import Update
 
-import langgodbot
-from settings import Settings
+from bot.langgodbot import LangGodBot
+from bot.settings import Settings
 import logging
 
 app = Flask(__name__)
@@ -23,27 +23,31 @@ def greet():
 def setup():
     logger.info('set_webhook')
 
-    bot = langgodbot.create_bot()
-    langgodbot.create_dispatcher(bot)
+    if LangGodBot.webhook_set():
+        return "Webhook is already set (:"
 
-    webhook_set = bot.setWebhook(Settings.WEBHOOK_URL)
-    if webhook_set:
-        return "Webhook set"
+    if not LangGodBot.initialized():
+        if not LangGodBot.initialize():
+            return "Failed to initialize LangGotBot :("
+
+    if LangGodBot.set_webhook(Settings.WEBHOOK_URL):
+        return "Webhook set! :)"
     else:
-        return "Webhook setup failed"
+        return "Webhook setup failed :("
 
 
 @app.route('/' + Settings.TELEGRAM_TOKEN, methods=['GET', 'POST'])
 def handler():
     logger.info("tg command, data = '%s'", request.data)
-    if langgodbot.dispatcher is None:
-        return "webhook wasn't set :("
+
+    if not LangGodBot.initialized():
+        return "LangGodBot isn't initialized"
 
     body = loads(request.data)
-    update = Update.de_json(body, langgodbot.bot_instance)
-    langgodbot.dispatcher.process_update(update)
+    update = Update.de_json(body, LangGodBot.bot)
+    LangGodBot.dispatcher.process_update(update)
 
-    return "ok"
+    return "command is handled"
 
 
 @app.route('/<string>')

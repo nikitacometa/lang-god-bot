@@ -1,6 +1,11 @@
+import logging
+
 from telegram.ext import CommandHandler
 
 from bot.commands.handlers import Handlers
+
+
+logger = logging.getLogger(__name__)
 
 
 class LangCommand:
@@ -10,16 +15,12 @@ class LangCommand:
         self.handler_function = handler_function
         self.show_in_help = show_in_help
 
-        Commands.register_command(self)
-
     @property
     def handler(self):
         return CommandHandler(self.name, self.handler_function)
 
 
 class Commands:
-    registry = {}
-
     start = LangCommand(
         'start',
         'show menu',
@@ -49,7 +50,3 @@ class Commands:
         'end current quiz',
         Handlers.end_quiz
     )
-
-    @classmethod
-    def register_command(cls, command):
-        cls.registry[command.name] = command
