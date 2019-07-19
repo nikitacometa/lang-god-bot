@@ -1,11 +1,6 @@
-import logging
-
 from telegram.ext import CommandHandler
 
 from bot.commands.handlers import Handlers
-
-
-logger = logging.getLogger(__name__)
 
 
 class LangCommand:

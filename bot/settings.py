@@ -1,10 +1,10 @@
 import logging
 
 from os import environ
-from environment import Environment
+from dotenv import load_dotenv
 
 
-Environment.fetch_variables()
+load_dotenv(verbose=True)
 
 
 class Settings:
